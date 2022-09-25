@@ -11,6 +11,7 @@ import './Helpers.sol';
 contract Teams is Helpers {
     uint256 public participationFee = 0;
     uint64 private teamCounter = 0;
+    uint64 public startELO = 1200;
 
     struct TeamAttributes {
         uint8 Reliability;
@@ -28,6 +29,7 @@ contract Teams is Helpers {
 
     mapping(address => uint64) public AddressToTeam;
     mapping(uint64 => TeamAttributes) public TeamToAttributes;
+    mapping(uint64 => uint64) public TeamToELO;
 
     event TeamCreated(TeamAttributes attributes, uint64 TeamId);
     event TeamDeleted(uint64 TeamId);
@@ -50,6 +52,9 @@ contract Teams is Helpers {
     * @param _aerodynamics aerodynamics of cars.
     **/
     function createTeam(uint8 _reliability, uint8 _pitstops, uint8 _speed, uint8 _drivers, uint8 _strategy, uint8 _cornering, uint8 _luck, uint8 _car_balance, uint8 _staff, uint8 _aerodynamics) public {
+        // Only one team per address.
+        require(AddressToTeam[msg.sender] == 0);
+
         TeamAttributes memory _TeamAttributes = TeamAttributes({
             Reliability: _reliability,
             Pitstops: _pitstops,
@@ -65,9 +70,10 @@ contract Teams is Helpers {
         });
 
         _verifyAttributes(_TeamAttributes);
-        
+
         ++teamCounter;
 
+        TeamToELO[teamCounter] = startELO;
         AddressToTeam[msg.sender] = teamCounter;
         TeamToAttributes[teamCounter] = _TeamAttributes;
 
@@ -80,15 +86,20 @@ contract Teams is Helpers {
     **/
     function deleteTeam(uint64 _TeamId) public {
         require(TeamToAttributes[_TeamId].Principal == msg.sender, "Sender is not team owner");
+        AddressToTeam[msg.sender] = 0;
+        delete TeamToAttributes[_TeamId];
     }
 
     /**
-    * @notice Upgrades a team's attributes.
+    * @notice Upgrades a team's attributes by paying a mechanic fee.
     * @param _TeamId Team ID
     **/
-    function upgradeTeam(uint64 _TeamId) public {
+    function upgradeTeam(uint64 _TeamId, TeamAttributes memory _attributes) public {
         // Check that team exists
         require(TeamToAttributes[_TeamId].Principal == msg.sender, "Sender is not team owner");
+        _verifyAttributes(_attributes);
+
+        TeamToAttributes[_TeamId] = _attributes;
     }
 
     /**
