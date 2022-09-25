@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.15;
-
-import './Helpers.sol';                            
+pragma solidity ^0.8.15;                     
 
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣴⣶⠶⠶⣶⣦⣄⠀⠀⠀⣀⣠⣤⣴⣶⣦⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 // ⠀⠀⠀⠀⠀⠀⠀⣠⣶⠟⠋⠁⠀⠀⠀⠀⠀⠙⢷⣦⠟⠋⠉⠀⠀⠀⠈⠙⢿⣦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -32,7 +30,7 @@ import './Helpers.sol';
  * @author cairoeth <cairo@gradient.city>
  * @dev Contract that allows to create, store and manage racing teams.
  **/
-contract Teams is Helpers {
+contract Racing {
 
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
@@ -41,6 +39,12 @@ contract Teams is Helpers {
     event TeamCreated(TeamAttributes attributes, uint64 TeamId);
 
     event TeamDeleted(uint64 TeamId);
+
+    event JoinedRace(uint64 TeamId, uint256 bet);
+
+    event StartedRace(uint64[] racers, uint256[] bets);
+
+    event FinishedRace(uint64[] leaderboard);
 
     /*//////////////////////////////////////////////////////////////
                          MISCELLANEOUS CONSTANTS
@@ -67,6 +71,12 @@ contract Teams is Helpers {
     uint72 public entropy; // Random data used to choose the next turn.
 
     /*//////////////////////////////////////////////////////////////
+                             CIRCUIT STORAGE
+    //////////////////////////////////////////////////////////////*/
+
+
+
+    /*//////////////////////////////////////////////////////////////
                              TEAMS STORAGE
     //////////////////////////////////////////////////////////////*/
 
@@ -90,6 +100,10 @@ contract Teams is Helpers {
     mapping(uint64 => TeamAttributes) public TeamToAttributes;
 
     uint64[] public teams;
+    
+    uint64[] racers;
+
+    uint256[] bets;
 
     constructor() {
 
@@ -148,8 +162,42 @@ contract Teams is Helpers {
     }
 
     /*//////////////////////////////////////////////////////////////
-                                 HELPERS
+                                RACES
     //////////////////////////////////////////////////////////////*/
+
+    function joinRace(uint256 bet) public onlyPrincipal {
+        uint64 team = AddressToTeam[msg.sender]; 
+
+        // Add team ID to the list of current racers.
+        racers.push(team);
+
+        // Store bet amount
+        bets.push(bet);
+
+        emit JoinedRace(team, bet);
+
+        // Run race when it is full.
+        if (racers.length == 5) {
+            runRace();
+        }
+    }
+
+    function runRace() internal {
+        emit StartedRace(racers, bets);
+        // START RACE
+
+
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                                HELPERS
+    //////////////////////////////////////////////////////////////*/
+
+    modifier onlyPrincipal() {
+        require(AddressToTeam[msg.sender] != 0, "NOT_A_PRINCIAPL");
+
+        _;
+    }
 
     function _verifyAttributes(TeamAttributes memory _attributes) internal pure {
         _checkAttribute(_attributes.Reliability);
@@ -167,6 +215,12 @@ contract Teams is Helpers {
         
         if (sum_of_attributes < 10 || sum_of_attributes > 50) {
             revert("Invalid sum of attributes.");
+        }
+    }
+
+    function _checkAttribute(uint8 _attribute) internal pure {
+        if (_attribute < 1 || _attribute > 10) {
+            revert("Invalid attribute.");
         }
     }
     
