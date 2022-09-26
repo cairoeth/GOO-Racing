@@ -48,9 +48,9 @@ contract Racing is ChainlinkClient {
 
     event StartedRace(uint64[] racers);
 
-    event FinishedRace(uint64[] leaderboard);
+    event FinishedRace(uint8[] leaderboard);
 
-    event RequestedLeaderboard(bytes32 indexed requestId, string id);
+    event RequestedLeaderboard(bytes32 indexed requestId, uint256 value);
 
     /*//////////////////////////////////////////////////////////////
                           CHAINLINK CONSTANTS
@@ -307,7 +307,7 @@ contract Racing is ChainlinkClient {
     function finishRace(uint256 values) internal {
         // The leaderboard is sorted from the lowest average lap time for the 10 laps. Payouts are given when the leaderboard is generated.
         // TODO: Create leaderboard array from uint256
-        uint64[] memory leaderboard = [1];
+        uint8[] memory leaderboard;
 
         emit FinishedRace(leaderboard);
     }
