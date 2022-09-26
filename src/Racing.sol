@@ -127,11 +127,9 @@ contract Racing is ChainlinkClient {
 
     mapping(uint64 => TeamAttributes) public TeamToAttributes;
 
-    uint[][] public LevelAttributes;
-
     uint64[] public teams;
     
-    uint64[] racers;
+    uint64[] private racers;
 
     /*//////////////////////////////////////////////////////////////
                                CONSTRUCTOR
