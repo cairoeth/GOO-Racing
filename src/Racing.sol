@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;                     
 
+import "openzeppelin-contracts/contracts/utils/Strings.sol";
+import 'chainlink/contracts/src/v0.8/ChainlinkClient.sol';
 import "./interfaces/GooInterface.sol";
 
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣴⣶⠶⠶⣶⣦⣄⠀⠀⠀⣀⣠⣤⣴⣶⣦⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -30,9 +32,11 @@ import "./interfaces/GooInterface.sol";
 /**
  * @title GOO Racing: A dynamic on-chain racing game
  * @author cairoeth <cairo@gradient.city>
- * @dev Contract that allows to create, store and manage racing teams.
+ * @notice Contract that allows to create, store and manage racing teams.
  **/
-contract Racing {
+contract Racing is ChainlinkClient {
+    using Strings for uint8;
+    using Chainlink for Chainlink.Request;
 
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
@@ -40,13 +44,23 @@ contract Racing {
 
     event TeamCreated(TeamAttributes attributes, uint64 TeamId);
 
-    event TeamDeleted(uint64 TeamId);
-
     event JoinedRace(uint64 TeamId);
 
     event StartedRace(uint64[] racers);
 
     event FinishedRace(uint64[] leaderboard);
+
+    event RequestedLeaderboard(bytes32 indexed requestId, string id);
+
+    /*//////////////////////////////////////////////////////////////
+                          CHAINLINK CONSTANTS
+    //////////////////////////////////////////////////////////////*/
+
+    string public id;
+
+    bytes32 private jobId;
+    
+    uint256 private fee;
 
     /*//////////////////////////////////////////////////////////////
                          MISCELLANEOUS CONSTANTS
@@ -57,8 +71,6 @@ contract Racing {
     uint64 private teamCounter = 0;
 
     uint64 private startELO = 1200;
-
-    uint8 private LapsPerRace = 10;
 
     GooInterface public Goo;
 
@@ -74,11 +86,7 @@ contract Racing {
 
     State public state;  // The current state of the race: waiting for players, started, done.
 
-    uint72 public entropy;  // Random data used to calculate race outcome.
-
     uint256 public races;  // Count of completed races.
-
-    mapping(uint64 => uint256) private DriverToLapTime;
 
     /*//////////////////////////////////////////////////////////////
                              CIRCUIT STORAGE
@@ -119,6 +127,8 @@ contract Racing {
 
     mapping(uint64 => TeamAttributes) public TeamToAttributes;
 
+    uint[][] public LevelAttributes;
+
     uint64[] public teams;
     
     uint64[] racers;
@@ -127,9 +137,25 @@ contract Racing {
                                CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
 
-    constructor(address _gooAddress) {
-        // Set ArtGobbler's Goo token address.
+    constructor(address _gooAddress, address _link, address _oracle) {
+        /*//////////////////////////////////////////////////////////////
+                                CHAINLINK SETUP
+        //////////////////////////////////////////////////////////////*/
+
+        setChainlinkToken(_link);
+        setChainlinkOracle(_oracle);
+        jobId = '7d80a6386ef543a3abb52817f6707e3b';
+        fee = (1 * LINK_DIVISIBILITY) / 10;  // 0,1 * 10**18 (Varies by network and job)
+
+        /*//////////////////////////////////////////////////////////////
+                                GOO TOKEN
+        //////////////////////////////////////////////////////////////*/
+
         setGooToken(_gooAddress);
+
+        /*//////////////////////////////////////////////////////////////
+                                  CIRCUITS
+        //////////////////////////////////////////////////////////////*/
 
         // Set the external attributes for the F1 2023 circuits (data from https://www.racefans.net).
         
@@ -265,52 +291,51 @@ contract Racing {
 
         // Run race when it is full.
         if (racers.length == 5) {
-            runRace();
+            startRace();
         }
     }
 
     /// @notice Execute the run when it is full.
-    function runRace() internal {
+    function startRace() internal {
         emit StartedRace(racers);
 
-        // Get the given circuit to race on.
-        ExternalFactors memory circuit = _getCircuit();
+        // Gets current circuit and calls simulations to generate leaderboard.
+        requestLeaderboard(_getCircuit());
+    }
 
-        // Race starts with 10 laps remaining.
-        for (uint i = 0; i < racers.length; i++) {
-            // Store the id of the racing team.
-            uint64 teamId = racers[i];
-
-            // Store the attributes of the racing team.
-            TeamAttributes memory attributes = TeamToAttributes[teamId];
-
-            // Delete any previous lap times of the racing team.
-            delete DriverToLapTime[teamId];
-
-            // Race 10 laps and calculate given time per lap which is averaged.
-            for (uint z = 0; z < 10; z++) {
-                uint256 TeamLapTime = lapTime(circuit, attributes);
-                DriverToLapTime[teamId] = (DriverToLapTime[teamId] & TeamLapTime) + (DriverToLapTime[teamId] ^ TeamLapTime) / 2;
-            }
-        }
-
+    /// @notice Finishes the race and pays the winners following the received leaderboard.
+    function finishRace(uint256 values) internal {
         // The leaderboard is sorted from the lowest average lap time for the 10 laps. Payouts are given when the leaderboard is generated.
-        uint64[] memory leaderboard = generateLeaderboard();
+        // TODO: Create leaderboard array from uint256
+        uint64[] memory leaderboard = [1];
 
         emit FinishedRace(leaderboard);
     }
-    
-    /// @notice Calculates a lap time for a given curcuit and attributes (team).
-    /// @param _circuit The external factors of the current circuit.
-    /// @param _attributes The attributes of the racing team.
-    function lapTime(ExternalFactors memory _circuit, TeamAttributes memory _attributes) internal returns (uint256) {
-        // TODO: Calculate the lap time given external factors, team attributes, and randomness.
+
+    /*//////////////////////////////////////////////////////////////
+                               CHAINLINK
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Calls for simulations.
+    function requestLeaderboard(uint8 _circuit) internal returns (bytes32) {
+        Chainlink.Request memory req = buildChainlinkRequest(jobId, address(this), this.fulfill.selector);
+
+        // Set the URL to perform the GET request on
+        req.add('get', string.concat('https://app.gradient.city/api/', Strings.toString(_circuit)));
+
+        req.add('path', 'val'); // Chainlink nodes 1.0.0 and later support this format
+
+        int256 timesAmount = 1;
+        req.addInt('times', timesAmount);
+
+        return sendChainlinkRequest(req, fee);
     }
 
-    /// @notice Generates a leaderboard based on the average lap times of the race.
-    function generateLeaderboard() internal returns (uint64[] memory) {
-        // TODO: Generate leaderboard
-        // TODO: Pay the respective przies
+    /// @notice Receives leaderboard for race.
+    function fulfill(bytes32 _requestId, uint256 _value) public recordChainlinkFulfillment(_requestId) {
+        emit RequestedLeaderboard(_requestId, _value);
+
+        finishRace(_value);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -354,7 +379,7 @@ contract Racing {
         }
     }
     
-    function _getCircuit() internal returns (ExternalFactors memory circuit) {
+    function _getCircuit() internal returns (uint8) {
         // Maximum of 24 races per circuit.
         if ((races % 24) == 0) {
             // When 24 circuits have been raced, start back at Bahrain (index 0).
@@ -365,7 +390,7 @@ contract Racing {
             }
         }
 
-        return circuits[currentCircuit];
+        return currentCircuit;
     }
 
     function setGooToken(address gooAddress) internal {
