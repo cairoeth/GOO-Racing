@@ -123,6 +123,10 @@ contract Racing {
     
     uint64[] racers;
 
+    /*//////////////////////////////////////////////////////////////
+                               CONSTRUCTOR
+    //////////////////////////////////////////////////////////////*/
+
     constructor(address _gooAddress) {
         // Set ArtGobbler's Goo token address.
         setGooToken(_gooAddress);
@@ -206,28 +210,14 @@ contract Racing {
                             TEAM MANAGEMENT
     //////////////////////////////////////////////////////////////*/
 
-    function createTeam(uint8 _reliability, uint8 _pitstops, uint8 _speed, uint8 _drivers, uint8 _strategy, uint8 _cornering, uint8 _luck, uint8 _car_balance, uint8 _staff, uint8 _aerodynamics) external {
+    /// @notice Create a racing team with the given attributes.
+    /// @param _attributes Attributes of the racing team.
+    function createTeam(TeamAttributes memory _attributes) external {
         // Only one team per address.
         require(AddressToTeam[msg.sender] == 0, 'ALREADY_TEAM');
 
-        // Combine all the given team attributes.
-        TeamAttributes memory _TeamAttributes = TeamAttributes({
-            Reliability: _reliability,
-            Pitstops: _pitstops,
-            Speed: _speed,
-            Drivers: _drivers,
-            Strategy: _strategy,
-            Cornering: _cornering,
-            Luck: _luck,
-            Car_balance: _car_balance,
-            Staff: _staff,
-            Aerodynamics: _aerodynamics,
-            Principal: msg.sender,
-            ELO: startELO
-        });
-
         // Verify the given attributes are valid.
-        _verifyAttributes(_TeamAttributes);
+        _verifyAttributes(_attributes);
 
         // Increase team count (using as ID).
         ++teamCounter;
@@ -237,15 +227,17 @@ contract Racing {
 
         // Configure mappings with team attributes and principal address.
         AddressToTeam[msg.sender] = teamCounter;
-        TeamToAttributes[teamCounter] = _TeamAttributes;
+        TeamToAttributes[teamCounter] = _attributes;
 
-        emit TeamCreated(_TeamAttributes, teamCounter);
+        emit TeamCreated(_attributes, teamCounter);
     }
 
-    function upgradeTeam(TeamAttributes memory _attributes) external {
-        // TODO: Add mechanic fee
-        // Verify sender is the principal of a team.
-        require(AddressToTeam[msg.sender] != 0, 'NO_TEAM');
+    /// @notice Upgrade the attributes of an existing racing team. Charges a mechanic fee.
+    /// @param _attributes New attributes for the racing team.
+    function upgradeTeam(TeamAttributes memory _attributes) external onlyPrincipal onlyWhenWaiting {
+        // Mechanic fee (requires approval).
+        // TODO: Add adjusted fee based on GOO mechanic
+        require(Goo.transferFrom(msg.sender, address(this), .01 ether));
 
         // Verify given team attributes.
         _verifyAttributes(_attributes);
@@ -258,8 +250,11 @@ contract Racing {
                                 RACES
     //////////////////////////////////////////////////////////////*/
 
-    function joinRace() public onlyPrincipal onlyWhenWaiting {
-        // TODO: Charge the fee in Goo to join the race.
+    /// @notice Join the queue for the upcoming race.
+    function joinRace() external onlyPrincipal onlyWhenWaiting {
+        // Participation fee (requires approval).
+        // TODO: Add adjusted fee based on GOO mechanic
+        require(Goo.transferFrom(msg.sender, address(this), .01 ether));
 
         uint64 team = AddressToTeam[msg.sender]; 
 
@@ -274,6 +269,7 @@ contract Racing {
         }
     }
 
+    /// @notice Execute the run when it is full.
     function runRace() internal {
         emit StartedRace(racers);
 
@@ -304,10 +300,14 @@ contract Racing {
         emit FinishedRace(leaderboard);
     }
     
-    function lapTime(ExternalFactors memory circuit, TeamAttributes memory attributes) internal returns (uint256) {
+    /// @notice Calculates a lap time for a given curcuit and attributes (team).
+    /// @param _circuit The external factors of the current circuit.
+    /// @param _attributes The attributes of the racing team.
+    function lapTime(ExternalFactors memory _circuit, TeamAttributes memory _attributes) internal returns (uint256) {
         // TODO: Calculate the lap time given external factors, team attributes, and randomness.
     }
 
+    /// @notice Generates a leaderboard based on the average lap times of the race.
     function generateLeaderboard() internal returns (uint64[] memory) {
         // TODO: Generate leaderboard
         // TODO: Pay the respective przies
