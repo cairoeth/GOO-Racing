@@ -74,7 +74,15 @@ contract Racing {
                              CIRCUIT STORAGE
     //////////////////////////////////////////////////////////////*/
 
+    struct ExternalFactors {
+        uint8 Weather;  // Precipitation level as how many days it rains per year (0, 33: Low | 33, 66: Medimum | 66, 100: High)
+        uint8 Crashes;  // Safest level (0, 33: Low | 33, 66: Medimum | 66, 100: High)
+        uint16 Full_Throttle;  // Full throttle in % (0, 33: Low | 33, 66: Medimum | 66, 100: High)
+        uint8 Downforce;  // Downforce level (33: Low | 66: Medimum | 100: High)
+        uint16 Top_Speed;  // Top Speed in km/h
+    }
 
+    ExternalFactors[] public circuits;
 
     /*//////////////////////////////////////////////////////////////
                              TEAMS STORAGE
@@ -106,7 +114,79 @@ contract Racing {
     uint256[] bets;
 
     constructor() {
+        // Data from https://www.racefans.net
 
+        // Bahrain = 0
+        circuits.push(ExternalFactors(2, 8, 72, 66, 330));
+
+        // Saudi Arabia = 1
+        circuits.push(ExternalFactors(1, 66, 79, 66, 330));
+
+        // Australia = 2
+        circuits.push(ExternalFactors(25, 5, 70, 80, 310));
+
+        // China = 3
+        circuits.push(ExternalFactors(33, 25, 54, 90, 348));
+
+        // Azerbaijan = 4
+        circuits.push(ExternalFactors(13, 70, 75, 66, 337));
+
+        // Miami = 5
+        circuits.push(ExternalFactors(39, 40, 70, 70, 296));
+
+        // Emilia Romagna = 6
+        circuits.push(ExternalFactors(21, 60, 79, 40, 296));
+
+        // Monaco = 7
+        circuits.push(ExternalFactors(17, 66, 59, 90, 290));
+
+        // Spain = 8
+        circuits.push(ExternalFactors(15, 30, 70, 66, 322));
+
+        // Canada = 9
+        circuits.push(ExternalFactors(45, 35, 76, 66, 316));
+
+        // Austria = 10
+        circuits.push(ExternalFactors(26, 15, 79, 40, 327));
+
+        // United Kingdom = 11
+        circuits.push(ExternalFactors(32, 60, 70, 70, 330));
+
+        // Hungary = 12
+        circuits.push(ExternalFactors(21, 15, 50, 80, 315));
+
+        // Belgium = 13
+        circuits.push(ExternalFactors(58, 50, 70, 50, 320));
+
+        // Netherlands = 14
+        circuits.push(ExternalFactors(36, 20, 70, 50, 309));
+
+        // Italy = 15
+        circuits.push(ExternalFactors(33, 50, 84, 30, 350));
+
+        // Signapore = 16
+        circuits.push(ExternalFactors(46, 75, 50, 66, 323));
+
+        // Japan = 17
+        circuits.push(ExternalFactors(31, 55, 66, 85, 328));
+
+        // Qatar = 18
+        circuits.push(ExternalFactors(2, 30, 68, 60, 321));
+
+        // USA (Austin) = 19
+        circuits.push(ExternalFactors(24, 15, 59, 50, 325));
+
+        // Mexico = 20
+        circuits.push(ExternalFactors(34, 45, 45, 40, 349));
+
+        // Brazil = 21
+        circuits.push(ExternalFactors(29, 70, 64, 80, 331));
+
+        // Las Vegas = 22 (predicted)
+        circuits.push(ExternalFactors(7, 50, 70, 66, 335));
+
+        // Abu Dhabi = 23
+        circuits.push(ExternalFactors(0, 25, 63, 80, 339));
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -165,7 +245,7 @@ contract Racing {
                                 RACES
     //////////////////////////////////////////////////////////////*/
 
-    function joinRace(uint256 bet) public onlyPrincipal {
+    function joinRace(uint256 bet) public onlyPrincipal onlyWhenWaiting {
         uint64 team = AddressToTeam[msg.sender]; 
 
         // Add team ID to the list of current racers.
@@ -195,6 +275,12 @@ contract Racing {
 
     modifier onlyPrincipal() {
         require(AddressToTeam[msg.sender] != 0, "NOT_A_PRINCIAPL");
+
+        _;
+    }
+
+     modifier onlyWhenWaiting() {
+        require(state == State.WAITING, "RACE_IS_ACTIVE");
 
         _;
     }
