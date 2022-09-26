@@ -42,9 +42,9 @@ contract Racing {
 
     event TeamDeleted(uint64 TeamId);
 
-    event JoinedRace(uint64 TeamId, uint256 bet);
+    event JoinedRace(uint64 TeamId);
 
-    event StartedRace(uint64[] racers, uint256[] bets);
+    event StartedRace(uint64[] racers);
 
     event FinishedRace(uint64[] leaderboard);
 
@@ -56,7 +56,9 @@ contract Racing {
 
     uint64 private teamCounter = 0;
 
-    uint64 public startELO = 1200;
+    uint64 private startELO = 1200;
+
+    uint8 private LapsPerRace = 10;
 
     GooInterface public Goo;
 
@@ -75,6 +77,8 @@ contract Racing {
     uint72 public entropy;  // Random data used to calculate race outcome.
 
     uint256 public races;  // Count of completed races.
+
+    mapping(uint64 => uint256) private DriverToLapTime;
 
     /*//////////////////////////////////////////////////////////////
                              CIRCUIT STORAGE
@@ -118,8 +122,6 @@ contract Racing {
     uint64[] public teams;
     
     uint64[] racers;
-
-    uint256[] bets;
 
     constructor(address _gooAddress) {
         // Set ArtGobbler's Goo token address.
@@ -256,16 +258,15 @@ contract Racing {
                                 RACES
     //////////////////////////////////////////////////////////////*/
 
-    function joinRace(uint256 bet) public onlyPrincipal onlyWhenWaiting {
+    function joinRace() public onlyPrincipal onlyWhenWaiting {
+        // TODO: Charge the fee in Goo to join the race.
+
         uint64 team = AddressToTeam[msg.sender]; 
 
         // Add team ID to the list of current racers.
         racers.push(team);
 
-        // Store bet amount
-        bets.push(bet);
-
-        emit JoinedRace(team, bet);
+        emit JoinedRace(team);
 
         // Run race when it is full.
         if (racers.length == 5) {
@@ -274,11 +275,42 @@ contract Racing {
     }
 
     function runRace() internal {
-        emit StartedRace(racers, bets);
+        emit StartedRace(racers);
+
+        // Get the given circuit to race on.
         ExternalFactors memory circuit = _getCircuit();
-        // START RACE
 
+        // Race starts with 10 laps remaining.
+        for (uint i = 0; i < racers.length; i++) {
+            // Store the id of the racing team.
+            uint64 teamId = racers[i];
 
+            // Store the attributes of the racing team.
+            TeamAttributes memory attributes = TeamToAttributes[teamId];
+
+            // Delete any previous lap times of the racing team.
+            delete DriverToLapTime[teamId];
+
+            // Race 10 laps and calculate given time per lap which is averaged.
+            for (uint z = 0; z < 10; z++) {
+                uint256 TeamLapTime = lapTime(circuit, attributes);
+                DriverToLapTime[teamId] = (DriverToLapTime[teamId] & TeamLapTime) + (DriverToLapTime[teamId] ^ TeamLapTime) / 2;
+            }
+        }
+
+        // The leaderboard is sorted from the lowest average lap time for the 10 laps. Payouts are given when the leaderboard is generated.
+        uint64[] memory leaderboard = generateLeaderboard();
+
+        emit FinishedRace(leaderboard);
+    }
+    
+    function lapTime(ExternalFactors memory circuit, TeamAttributes memory attributes) internal returns (uint256) {
+        // TODO: Calculate the lap time given external factors, team attributes, and randomness.
+    }
+
+    function generateLeaderboard() internal returns (uint64[] memory) {
+        // TODO: Generate leaderboard
+        // TODO: Pay the respective przies
     }
 
     /*//////////////////////////////////////////////////////////////
