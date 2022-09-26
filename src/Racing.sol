@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;                     
 
+import "./interfaces/GooInterface.sol";
+
 // ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣴⣶⠶⠶⣶⣦⣄⠀⠀⠀⣀⣠⣤⣴⣶⣦⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 // ⠀⠀⠀⠀⠀⠀⠀⣠⣶⠟⠋⠁⠀⠀⠀⠀⠀⠙⢷⣦⠟⠋⠉⠀⠀⠀⠈⠙⢿⣦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 // ⠀⠀⠀⠀⠀⢀⣾⠋⠁⠀⢀⣤⠶⠚⠛⠛⠳⠶⣤⣙⣧⣀⠀⠀⣀⣀⣀⠀⠀⠙⢿⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -56,6 +58,8 @@ contract Racing {
 
     uint64 public startELO = 1200;
 
+    GooInterface public Goo;
+
     /*//////////////////////////////////////////////////////////////
                                RACE STATE
     //////////////////////////////////////////////////////////////*/
@@ -66,9 +70,11 @@ contract Racing {
         DONE
     }
 
-    State public state; // The current state of the race: waiting for players, started, done.
+    State public state;  // The current state of the race: waiting for players, started, done.
 
-    uint72 public entropy; // Random data used to choose the next turn.
+    uint72 public entropy;  // Random data used to calculate race outcome.
+
+    uint256 public races;  // Count of completed races.
 
     /*//////////////////////////////////////////////////////////////
                              CIRCUIT STORAGE
@@ -83,6 +89,8 @@ contract Racing {
     }
 
     ExternalFactors[] public circuits;
+
+    uint8 private currentCircuit;
 
     /*//////////////////////////////////////////////////////////////
                              TEAMS STORAGE
@@ -113,9 +121,12 @@ contract Racing {
 
     uint256[] bets;
 
-    constructor() {
-        // Data from https://www.racefans.net
+    constructor(address _gooAddress) {
+        // Set ArtGobbler's Goo token address.
+        setGooToken(_gooAddress);
 
+        // Set the external attributes for the F1 2023 circuits (data from https://www.racefans.net).
+        
         // Bahrain = 0
         circuits.push(ExternalFactors(2, 8, 72, 66, 330));
 
@@ -264,6 +275,7 @@ contract Racing {
 
     function runRace() internal {
         emit StartedRace(racers, bets);
+        ExternalFactors memory circuit = _getCircuit();
         // START RACE
 
 
@@ -310,4 +322,21 @@ contract Racing {
         }
     }
     
+    function _getCircuit() internal returns (ExternalFactors memory circuit) {
+        // Maximum of 24 races per circuit.
+        if ((races % 24) == 0) {
+            // When 24 circuits have been raced, start back at Bahrain (index 0).
+            if (currentCircuit == 23) {
+                currentCircuit = 0;
+            } else {
+                currentCircuit++;
+            }
+        }
+
+        return circuits[currentCircuit];
+    }
+
+    function setGooToken(address gooAddress) internal {
+        Goo = GooInterface(gooAddress);
+    }
 }
